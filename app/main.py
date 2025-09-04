@@ -1,6 +1,13 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+# In app/main.py
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
 from typing import List
+
+from . import models, schemas
+from .database import engine, get_db
+
+# This line creates the database tables if they don't exist
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Nomad's Compass API",
@@ -8,39 +15,18 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Pydantic models (our data schemas)
-class VisaRequirement(BaseModel):
-    document_name: str
-    description: str
-    is_mandatory: bool
+# A simple function to get data from the DB
+def get_country_by_code(db: Session, country_code: str):
+    return db.query(models.Country).filter(models.Country.code == country_code.upper()).first()
 
-class VisaInfo(BaseModel):
-    country_code: str
-    country_name: str
-    policy: str  # e.g., "Visa on Arrival", "E-Visa", "Visa Required"
-    processing_time_days: int
-    requirements: List[VisaRequirement]
-
-# The first API endpoint
-@app.get("/visa/{country_code}", response_model=VisaInfo)
-def get_visa_info(country_code: str):
+# Updated API endpoint
+@app.get("/visa/{country_code}", response_model=schemas.Country)
+def get_visa_info(country_code: str, db: Session = Depends(get_db)):
     """
     Retrieves visa information for an Indian passport holder
     for a given destination country code (e.g., 'THA' for Thailand).
     """
-    # This is a stub. In the future, this data will come from our PostgreSQL DB.
-    if country_code.upper() == "THA":
-        return VisaInfo(
-            country_code="THA",
-            country_name="Thailand",
-            policy="Visa on Arrival",
-            processing_time_days=1,
-            requirements=[
-                VisaRequirement(document_name="Passport", description="Valid for at least 6 months", is_mandatory=True),
-                VisaRequirement(document_name="Return Flight Ticket", description="Proof of onward travel", is_mandatory=True),
-                VisaRequirement(document_name="Proof of Accommodation", description="Hotel bookings for the duration of stay", is_mandatory=True),
-                VisaRequirement(document_name="Passport Size Photo", description="4x6 cm, white background", is_mandatory=True),
-            ]
-        )
-    # Return a proper error response
-    return {"error": "Country data not found"}
+    db_country = get_country_by_code(db, country_code=country_code)
+    if db_country is None:
+        raise HTTPException(status_code=404, detail="Country data not found")
+    return db_country

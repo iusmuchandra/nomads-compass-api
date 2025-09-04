@@ -1,0 +1,19 @@
+# In docker-compose.yml
+
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres      # Replaced with the user from your .env
+      - POSTGRES_PASSWORD=Ranga123  # Replaced with the password from your .env
+      - POSTGRES_DB=nomads_compass_db       # Replaced with the db name from your .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+
+volumes:
+  postgres_data:
