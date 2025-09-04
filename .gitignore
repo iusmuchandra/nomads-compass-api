@@ -1,0 +1,10 @@
+# Byte-compiled / optimized / C extensions 
+__pycache__/ 
+*.py[cod] 
+*$py.class 
+ 
+# Virtual Environments 
+venv/ 
+ 
+# Environment variables 
+.env 
