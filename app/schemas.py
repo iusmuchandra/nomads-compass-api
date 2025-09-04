@@ -1,12 +1,9 @@
-# In app/schemas.py
-
 from pydantic import BaseModel
 from typing import List, Optional
 
 # =================================
 # Schemas for Visa Requirements
 # =================================
-
 class VisaRequirementBase(BaseModel):
     document_name: str
     description: Optional[str] = None
@@ -15,10 +12,9 @@ class VisaRequirementBase(BaseModel):
 class VisaRequirementCreate(VisaRequirementBase):
     pass
 
-# We modify this schema to include a reference back to its parent Country
 class VisaRequirement(VisaRequirementBase):
     id: int
-    country_id: int  # Add the foreign key field
+    country_id: int
 
     class Config:
         from_attributes = True
@@ -26,7 +22,6 @@ class VisaRequirement(VisaRequirementBase):
 # =================================
 # Schemas for Countries
 # =================================
-
 class CountryBase(BaseModel):
     name: str
     code: str
@@ -48,3 +43,16 @@ class CountryUpdate(BaseModel):
     code: Optional[str] = None
     visa_policy: Optional[str] = None
     processing_time_days: Optional[int] = None
+
+# =================================
+# Schemas for External APIs
+# =================================
+
+# FINAL, CORRECTED VERSION
+class FlightData(BaseModel):
+    airline: str
+    flight: str
+    departure: str
+    arrival: str
+    altitude: Optional[int] = None  # <-- The fix: Mark altitude as optional
+    type: str
