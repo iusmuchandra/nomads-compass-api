@@ -1,3 +1,4 @@
+import asyncio
 import os
 import httpx
 from . import schemas
@@ -20,14 +21,11 @@ async def search_flights_by_airline(airline_code: str) -> List[schemas.FlightDat
     }
     params = {"airline": airline_code}
 
-    # We initialize response outside the try block to use it in the except block
-    response = None 
+    response = None
     async with httpx.AsyncClient() as client:
         try:
             print(f"--- Calling external API for airline: {airline_code} ---")
             response = await client.get(url, headers=headers, params=params)
-            
-            # This will raise an exception if the status is 4xx or 5xx
             response.raise_for_status()
             
             flight_results = response.json()
@@ -36,20 +34,16 @@ async def search_flights_by_airline(airline_code: str) -> List[schemas.FlightDat
                 print(f"--- API call successful, but no flight data returned for {airline_code}. ---")
                 return []
             
-            # The core validation step: does the response match our schema?
             validated_flights = [schemas.FlightData(**flight) for flight in flight_results]
             print(f"--- Successfully parsed {len(validated_flights)} flights. ---")
             return validated_flights
 
         except httpx.HTTPStatusError as e:
-            # This catches errors like 401 Unauthorized, 403 Forbidden, etc.
             print(f"--- HTTP error occurred: {e.response.status_code} ---")
             print(f"Response Body: {e.response.text}")
             return []
         except Exception as e:
-            # This catches Pydantic ValidationErrors and other unexpected issues
             print("--- RAW RESPONSE THAT FAILED PARSING ---")
-            # We check if response is not None before trying to access its attributes
             if response:
                 print(response.text)
             else:
@@ -57,3 +51,31 @@ async def search_flights_by_airline(airline_code: str) -> List[schemas.FlightDat
             print("------------------------------------------")
             print(f"An unexpected error occurred during parsing: {e}")
             return []
+
+async def search_flights_on_route(origin: str, destination: str) -> List[schemas.FlightData]:
+    """
+    Simulates a route search by querying several major airlines and combining results.
+    """
+    # In a real-world app, this list would be dynamic or more extensive.
+    major_airlines = ["AI", "6E", "SQ", "EK"] # Air India, IndiGo, Singapore, Emirates
+    
+    # Create a list of concurrent tasks
+    tasks = [search_flights_by_airline(code) for code in major_airlines]
+    
+    # Run all API calls concurrently for speed
+    results_per_airline = await asyncio.gather(*tasks)
+    
+    all_flights = []
+    # Flatten the list of lists into a single list
+    for airline_flights in results_per_airline:
+        all_flights.extend(airline_flights)
+        
+    # Filter the combined list to match the user's requested route
+    route_flights = [
+        flight for flight in all_flights
+        if flight.departure and flight.arrival and 
+           flight.departure.upper() == origin.upper() and 
+           flight.arrival.upper() == destination.upper()
+    ]
+    
+    return route_flights

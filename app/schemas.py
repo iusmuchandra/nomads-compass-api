@@ -47,12 +47,18 @@ class CountryUpdate(BaseModel):
 # =================================
 # Schemas for External APIs
 # =================================
-
-# FINAL, CORRECTED VERSION
 class FlightData(BaseModel):
     airline: str
     flight: str
     departure: str
     arrival: str
-    altitude: Optional[int] = None  # <-- The fix: Mark altitude as optional
+    altitude: Optional[int] = None
     type: str
+
+# =================================
+# Schemas for Orchestration
+# =================================
+class TripPlan(BaseModel):
+    visa_information: Optional[Country] = None
+    flight_options: List[FlightData] = []
+
