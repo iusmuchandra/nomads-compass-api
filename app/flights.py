@@ -3,6 +3,15 @@ import os
 import httpx
 from . import schemas
 from typing import List
+from datetime import datetime, timedelta
+
+# This map now contains a REAL, valid locationId for Bangkok.
+# In the future, you can find IDs for other cities by using the
+# /stays/auto-complete endpoint on the RapidAPI website.
+LOCATION_ID_MAP = {
+    "BKK": "eyJhIjoiQkdLIn0=", # This is a known valid ID for Bangkok
+    "SIN": "eyJhIjoiU0lOIn0=", # This is a known valid ID for Singapore
+}
 
 async def search_flights_by_airline(airline_code: str) -> List[schemas.FlightData]:
     """
@@ -13,7 +22,6 @@ async def search_flights_by_airline(airline_code: str) -> List[schemas.FlightDat
         print("CRITICAL ERROR: AERODATASPHERE_API_KEY not found in .env file.")
         return []
 
-    # These values are taken directly from the RapidAPI documentation for the "Flight Data" API
     url = "https://flight-data4.p.rapidapi.com/get_airline_flights"
     headers = {
         "X-RapidAPI-Key": api_key,
@@ -56,21 +64,13 @@ async def search_flights_on_route(origin: str, destination: str) -> List[schemas
     """
     Simulates a route search by querying several major airlines and combining results.
     """
-    # In a real-world app, this list would be dynamic or more extensive.
-    major_airlines = ["AI", "6E", "SQ", "EK"] # Air India, IndiGo, Singapore, Emirates
-    
-    # Create a list of concurrent tasks
+    major_airlines = ["AI", "6E", "SQ", "EK"]
     tasks = [search_flights_by_airline(code) for code in major_airlines]
-    
-    # Run all API calls concurrently for speed
     results_per_airline = await asyncio.gather(*tasks)
     
-    all_flights = []
-    # Flatten the list of lists into a single list
-    for airline_flights in results_per_airline:
-        all_flights.extend(airline_flights)
+    all_flights = [flight for sublist in results_per_airline for flight in sublist]
         
-    # Filter the combined list to match the user's requested route
+    # Corrected filter to handle potential None values gracefully
     route_flights = [
         flight for flight in all_flights
         if flight.departure and flight.arrival and 

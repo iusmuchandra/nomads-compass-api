@@ -1,5 +1,3 @@
-# In app/database.py
-
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,10 +8,9 @@ load_dotenv()
 
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-# --- ADD THIS DEBUG LINE ---
+# --- DEBUG LINE ---
 print(f"--- DEBUG: Connecting with URL: {SQLALCHEMY_DATABASE_URL} ---")
-# -------------------------
-
+# ------------------
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
