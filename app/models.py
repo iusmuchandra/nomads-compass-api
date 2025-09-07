@@ -8,7 +8,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     instagram_handle = Column(String, nullable=True)
-    itineraries = relationship("Itinerary", back_populates="owner")
+    itineraries = relationship("Itinerary", back_populates="owner", cascade="all, delete-orphan")
 
 class Country(Base):
     __tablename__ = "countries"
@@ -32,9 +32,9 @@ class Itinerary(Base):
     __tablename__ = "itineraries"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id")) # <-- Link to User
+    owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="itineraries")
-    legs = relationship("Leg", back_populates="itinerary", cascade="all, delete-orphan")
+    legs = relationship("Leg", back_populates="itinerary", cascade="all, delete-orphan", lazy="joined")  # Added lazy="joined"
 
 class Leg(Base):
     __tablename__ = "legs"

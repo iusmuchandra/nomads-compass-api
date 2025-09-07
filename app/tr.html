@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomad's Compass - Your Smart Travel Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glass-card { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.1); }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg">
+    <nav id="navbar" class="bg-white/10 backdrop-blur-md border-b border-white/20 hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i data-lucide="compass" class="h-8 w-8 text-white mr-3"></i>
+     
+                    <span class="text-xl font-bold text-white">Nomad's Compass</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="userEmail" class="text-white/80"></span>
+                    <button id="logoutBtn" class="text-white hover:text-white/80 transition-colors">
+                        <i data-lucide="log-out" class="h-5 w-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="authView" class="min-h-screen flex items-center justify-center p-4">
+   
+         <div class="max-w-md w-full space-y-8">
+            <div class="text-center">
+                <i data-lucide="compass" class="mx-auto h-16 w-16 text-white mb-4"></i>
+                <h2 class="text-4xl font-bold text-white mb-2">Nomad's Compass</h2>
+                <p class="text-white/80">Your intelligent travel planning companion</p>
+            </div>
+   
+             
+            <div class="glass-card rounded-2xl p-8 border border-white/20">
+                <div class="mb-6">
+                    <div class="flex space-x-1 bg-white/10 rounded-lg p-1">
+                        <button id="loginTab" class="flex-1 py-2 text-sm font-medium rounded-md text-white bg-white/20 transition-all">
+                            Login
+                        </button>
+                        <button id="registerTab" class="flex-1 py-2 text-sm font-medium rounded-md text-white/70 hover:text-white transition-all">
+              
+                           Register
+                        </button>
+                    </div>
+                </div>
+
+                <form id="authForm" class="space-y-6">
+        
+                    <div>
+                        <input id="email" type="email" required placeholder="Email address"
+                               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                 
+                   </div>
+                    <div>
+                        <input id="password" type="password" required placeholder="Password"
+                               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+       
+                     </div>
+                    <div id="instagramField" class="hidden">
+                        <input id="instagram" type="text" placeholder="Instagram handle (optional)"
+                               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                    </div>
+                    <button type="submit" id="authSubmit"
+                            class="w-full py-3 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-all transform hover:scale-105">
+               
+                         <span id="authSubmitText">Sign In</span>
+                        <i id="authSpinner" data-lucide="loader-2" class="w-5 h-5 ml-2 loading-spinner hidden inline"></i>
+                    </button>
+                </form>
+                
+     
+                <div id="authError" class="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-100 text-sm hidden">
+                </div>
+                
+                <div id="debugConsole" class="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg text-blue-100 text-xs hidden">
+                    <div class="font-medium mb-2">Debug Information:</div>
+                    <pre id="debugContent" class="whitespace-pre-wrap"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboardView" class="hidden min-h-screen">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-8">
+  
+               <h1 class="text-3xl font-bold text-white mb-2">My Travel Itineraries</h1>
+                <p class="text-white/80">Plan your next adventure with AI-powered insights</p>
+            </div>
+
+            <div id="itinerariesContainer" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div class="glass-card rounded-2xl p-6 border border-white/20 hover:bg-white/20 transition-all cursor-pointer transform hover:scale-105"
+                     id="createItineraryCard">
+                    <div class="text-center">
+                        <i data-lucide="plus-circle" class="h-12 w-12 text-white mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Create New Itinerary</h3>
+                        <p class="text-white/70 text-sm">Start planning your next journey</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="createModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                <div class="glass-card rounded-2xl p-6 border border-white/20 max-w-md w-full">
+                    <h3 class="text-xl font-bold text-white mb-4">Create New Itinerary</h3>
+                    <form id="createItineraryForm">
+                        <input id="itineraryName" type="text" required placeholder="Itinerary name (e.g., Southeast Asia Adventure)"
+                               class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50 mb-4">
+                        <div class="flex space-x-3">
+                           
+                             <button type="button" id="cancelCreate"
+                                    class="flex-1 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors">
+                                Cancel
+                             </button>
+                            <button type="submit"
+                                    class="flex-1 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-colors">
+                       
+                                 Create
+                            </button>
+                        </div>
+                    </form>
+                </div>
+   
+             </div>
+        </div>
+    </div>
+
+    <div id="planView" class="hidden min-h-screen">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center">
+                    <button id="backToDashboard" class="mr-4 p-2 text-white hover:text-white/80 transition-colors">
+                        <i data-lucide="arrow-left" class="h-6 w-6"></i>
+                    </button>
+                    <div>
+                        <h1 id="itineraryTitle" class="text-3xl font-bold text-white mb-2"></h1>
+  
+                       <p class="text-white/80">Manage your travel legs and view comprehensive plans</p>
+                    </div>
+                </div>
+                <button id="addLegBtn" class="bg-white text-purple-700 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors">
+         
+                   <i data-lucide="plus" class="w-4 h-4 mr-2 inline"></i>
+                    Add Leg
+                </button>
+            </div>
+            
+            <div id="planError" class="my-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-100 text-sm hidden"></div>
+
+ 
+           <div id="legsContainer" class="mb-8"></div>
+
+            <div class="text-center mb-8">
+                <button id="generatePlanBtn" class="bg-white text-purple-700 px-8 py-3 rounded-lg font-semibold hover:bg-white/90 transition-all transform hover:scale-105">
+                    <i data-lucide="map" class="w-5 h-5 mr-2 inline"></i>
+                    Generate Complete Plan
+                    <i id="planSpinner" data-lucide="loader-2" class="w-5 h-5 ml-2 loading-spinner hidden inline"></i>
+                </button>
+            </div>
+
+            <div id="planResults" class="hidden space-y-6"></div>
+
+            <div id="addLegModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      
+                  <div class="glass-card rounded-2xl p-6 border border-white/20 max-w-md w-full">
+                    <h3 class="text-xl font-bold text-white mb-4">Add Travel Leg</h3>
+                    <form id="addLegForm" class="space-y-4">
+                        <div>
+           
+                                 <input id="originAirport" type="text" required placeholder="Origin airport (e.g., SIN)"
+                                   class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50"
+                                   maxlength="3" style="text-transform: uppercase;">
+                        </div>
+                        <div>
+                            <input id="destinationAirport" type="text" required placeholder="Destination airport (e.g., BKK)"
+          
+                                  class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50"
+                                   maxlength="3" style="text-transform: uppercase;">
+                        </div>
+   
+                         <div>
+                            <input id="travelDate" type="date" required
+                                   class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white/50">
+   
+                         </div>
+                        <div class="flex space-x-3">
+                            <button type="button" id="cancelAddLeg"
+                       
+                             class="flex-1 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors">
+                                Cancel
+                            </button>
+                     
+                   <button type="submit"
+                                    class="flex-1 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-colors">
+                                Add Leg
+                
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/umd/lucide.js"></script>
+    <script>
+        class NomadsCompassApp {
+            constructor() {
+                this.currentView = 'auth';
+                this.isLoginMode = true;
+                this.currentUser = null;
+                this.currentItinerary = null;
+                this.apiBase = 'http://localhost:8000'; // Update this to your FastAPI URL
+                this.debugMode = window.location.hostname === 'localhost' || window.location.search.includes('debug=true');
+                this.token = localStorage.getItem('token');
+                
+                this.init();
+            }
+
+            init() {
+                lucide.createIcons();
+                this.bindEvents();
+                
+                if (this.token) {
+                    this.validateTokenAndShowDashboard();
+                } else {
+                    this.showAuth();
+                }
+            }
+            
+            // --- REPLACED METHOD ---
+            async apiCall(endpoint, method = 'GET', body = null) {
+                const headers = {};
+                const options = { method, headers, signal: AbortSignal.timeout(20000) };
+
+                if (this.token) {
+                    headers['Authorization'] = `Bearer ${this.token}`;
+                }
+
+                if (body) {
+                    if (endpoint === '/token') {
+                        // For login, use FormData
+                        const formData = new URLSearchParams(body);
+                        options.body = formData;
+                    } else {
+                        headers['Content-Type'] = 'application/json';
+                        options.body = JSON.stringify(body);
+                    }
+                }
+                
+                try {
+                    const response = await fetch(`${this.apiBase}${endpoint}`, options);
+                    if (response.status === 204) return null;
+                    
+                    const data = await response.json();
+                    if (!response.ok) {
+                        if (response.status === 401) this.logout();
+                        throw new Error(data?.detail || `HTTP error! status: ${response.status}`);
+                    }
+                    return data;
+                } catch (error) {
+                    console.error(`API Error on ${method} ${endpoint}:`, error);
+                    throw error;
+                }
+            }
+            
+            // --- REPLACED METHOD ---
+            async validateTokenAndShowDashboard() {
+                try {
+                    this.currentUser = await this.apiCall('/users/me');
+                    this.showDashboard();
+                } catch (error) {
+                    this.debugLog('Token validation failed:', error);
+                    this.logout();
+                }
+            }
+
+            debugLog(message, data = null) {
+                if (this.debugMode) {
+                    console.log(message, data);
+                    const debugConsole = document.getElementById('debugConsole');
+                    const debugContent = document.getElementById('debugContent');
+                    if (debugConsole && debugContent) {
+                        debugConsole.classList.remove('hidden');
+                        const timestamp = new Date().toLocaleTimeString();
+                        const logEntry = `[${timestamp}] ${message}${data ? '\n' + JSON.stringify(data, null, 2) : ''}\n\n`;
+                        debugContent.textContent += logEntry;
+                        debugContent.scrollTop = debugContent.scrollHeight;
+                    }
+                }
+            }
+
+            bindEvents() {
+                document.getElementById('loginTab').addEventListener('click', () => this.switchToLogin());
+                document.getElementById('registerTab').addEventListener('click', () => this.switchToRegister());
+                document.getElementById('authForm').addEventListener('submit', (e) => this.handleAuth(e));
+                document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
+                document.getElementById('createItineraryCard').addEventListener('click', () => this.showCreateModal());
+                document.getElementById('createItineraryForm').addEventListener('submit', (e) => this.createItinerary(e));
+                document.getElementById('cancelCreate').addEventListener('click', () => this.hideCreateModal());
+                document.getElementById('backToDashboard').addEventListener('click', () => this.showDashboard());
+                document.getElementById('addLegBtn').addEventListener('click', () => this.showAddLegModal());
+                document.getElementById('addLegForm').addEventListener('submit', (e) => this.addLeg(e));
+                document.getElementById('cancelAddLeg').addEventListener('click', () => this.hideAddLegModal());
+                document.getElementById('generatePlanBtn').addEventListener('click', () => this.generatePlan());
+                document.getElementById('originAirport').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+                document.getElementById('destinationAirport').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+            }
+
+            // --- View Management ---
+            showAuth() {
+                this.hideAllViews();
+                document.getElementById('authView').classList.remove('hidden');
+                document.getElementById('navbar').classList.add('hidden');
+                this.currentView = 'auth';
+            }
+
+            async showDashboard() {
+                this.hideAllViews();
+                document.getElementById('dashboardView').classList.remove('hidden');
+                document.getElementById('navbar').classList.remove('hidden');
+                this.currentView = 'dashboard';
+                if (!this.currentUser) {
+                    await this.loadCurrentUser();
+                } else {
+                    document.getElementById('userEmail').textContent = this.currentUser.email;
+                }
+                this.loadItineraries();
+            }
+
+            // --- REPLACED METHOD ---
+            async showPlanView(itineraryId) {
+                this.hideAllViews();
+                document.getElementById('planView').classList.remove('hidden');
+                document.getElementById('navbar').classList.remove('hidden');
+                this.currentView = 'plan';
+                
+                // Hide previous errors and results
+                const errorDiv = document.getElementById('planError');
+                const resultsDiv = document.getElementById('planResults');
+                if (errorDiv) errorDiv.classList.add('hidden');
+                if (resultsDiv) {
+                    resultsDiv.innerHTML = '';
+                    resultsDiv.classList.add('hidden');
+                }
+
+                try {
+                    this.currentItinerary = await this.apiCall(`/itineraries/${itineraryId}`);
+                    const titleElement = document.getElementById('itineraryTitle');
+                    if (titleElement) {
+                        titleElement.textContent = this.currentItinerary.name;
+                    }
+                    this.renderLegs();
+                } catch (error) {
+                    this.showError(`Failed to load itinerary: ${error.message}`, 'planError');
+                    this.debugLog('Failed to load itinerary details', error);
+                }
+            }
+
+            hideAllViews() {
+                ['authView', 'dashboardView', 'planView'].forEach(view => {
+                    document.getElementById(view).classList.add('hidden');
+                });
+            }
+
+            // --- REPLACED METHOD ---
+            showError(message, elementId = 'authError') {
+                console.error(message);
+                const errorDiv = document.getElementById(elementId);
+                if (errorDiv) {
+                    errorDiv.textContent = message;
+                    errorDiv.classList.remove('hidden');
+                } else {
+                    // Fallback for when error div doesn't exist
+                    const contentArea = document.getElementById('content-area') || document.body;
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'glass-card rounded-lg p-4 bg-red-500/20 border border-red-500/50 text-red-100 mb-4';
+                    errorDiv.textContent = message;
+                    contentArea.prepend(errorDiv);
+                    setTimeout(() => errorDiv.remove(), 5000);
+                }
+            }
+            
+            // --- Auth Methods ---
+            
+            switchToLogin() {
+                this.isLoginMode = true;
+                document.getElementById('loginTab').classList.add('bg-white/20', 'text-white');
+                document.getElementById('loginTab').classList.remove('text-white/70');
+                document.getElementById('registerTab').classList.remove('bg-white/20', 'text-white');
+                document.getElementById('registerTab').classList.add('text-white/70');
+                document.getElementById('instagramField').classList.add('hidden');
+                document.getElementById('authSubmitText').textContent = 'Sign In';
+            }
+            
+            switchToRegister() {
+                this.isLoginMode = false;
+                document.getElementById('registerTab').classList.add('bg-white/20', 'text-white');
+                document.getElementById('registerTab').classList.remove('text-white/70');
+                document.getElementById('loginTab').classList.remove('bg-white/20', 'text-white');
+                document.getElementById('loginTab').classList.add('text-white/70');
+                document.getElementById('instagramField').classList.remove('hidden');
+                document.getElementById('authSubmitText').textContent = 'Create Account';
+            }
+
+            async handleAuth(e) {
+                e.preventDefault();
+                const submitBtn = document.getElementById('authSubmit');
+                const spinner = document.getElementById('authSpinner');
+                const errorDiv = document.getElementById('authError');
+                
+                submitBtn.disabled = true;
+                spinner.classList.remove('hidden');
+                errorDiv.classList.add('hidden');
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const instagram = document.getElementById('instagram').value;
+                try {
+                    if (this.isLoginMode) {
+                        await this.login(email, password);
+                    } else {
+                        await this.register(email, password, instagram);
+                    }
+                } catch (error) {
+                    this.debugLog('Authentication error:', error);
+                    this.showError(error.message); // MODIFIED: Calls new showError method
+                } finally {
+                    submitBtn.disabled = false;
+                    spinner.classList.add('hidden');
+                }
+            }
+            
+            // --- REPLACED METHOD ---
+            async login(email, password) {
+                this.debugLog('Starting login process for:', email);
+                
+                try {
+                    const data = await this.apiCall('/token', 'POST', { username: email, password });
+                    this.token = data.access_token;
+                    localStorage.setItem('token', this.token);
+                    
+                    this.debugLog('Login successful, token stored');
+                    await this.validateTokenAndShowDashboard();
+                } catch (error) {
+                    this.debugLog('Login error:', error);
+                    throw error;
+                }
+            }
+            
+            // --- REPLACED METHOD ---
+            async register(email, password, instagram) {
+                this.debugLog('Starting registration process for:', email);
+                const payload = {
+                    email,
+                    password,
+                    instagram_handle: instagram || null
+                };
+                await this.apiCall('/users/register', 'POST', payload);
+                this.debugLog('Registration successful. Logging in...');
+                await this.login(email, password);
+            }
+
+            // --- REPLACED METHOD ---
+            async loadCurrentUser() {
+                if (!this.token) return;
+                try {
+                    this.currentUser = await this.apiCall('/users/me');
+                    const emailElement = document.getElementById('userEmail');
+                    if (emailElement) {
+                        emailElement.textContent = this.currentUser.email;
+                    }
+                    this.debugLog('Current user loaded:', this.currentUser);
+                } catch (error) {
+                    this.debugLog('Load current user error:', error);
+                    this.logout();
+                }
+            }
+            
+            logout() {
+                this.debugLog('Logging out user');
+                localStorage.removeItem('token');
+                this.token = null;
+                this.currentUser = null;
+                this.showAuth();
+            }
+
+            // --- Modal Management ---
+            
+            showCreateModal() {
+                document.getElementById('createModal').classList.remove('hidden');
+            }
+            
+            hideCreateModal() {
+                document.getElementById('createModal').classList.add('hidden');
+                document.getElementById('itineraryName').value = '';
+            }
+
+            // --- FIX: Sets min date to today ---
+            showAddLegModal() {
+                const travelDateInput = document.getElementById('travelDate');
+                // Set the minimum date to today to prevent selecting past dates
+                travelDateInput.min = new Date().toISOString().split("T")[0];
+                document.getElementById('addLegModal').classList.remove('hidden');
+            }
+            
+            hideAddLegModal() {
+                document.getElementById('addLegModal').classList.add('hidden');
+                document.getElementById('addLegForm').reset();
+            }
+
+            // --- Itinerary Management ---
+            // --- REPLACED METHOD ---
+            async createItinerary(e) {
+                e.preventDefault();
+                const name = document.getElementById('itineraryName').value;
+                try {
+                    const newItinerary = await this.apiCall('/itineraries/', 'POST', { name });
+                    this.debugLog('Itinerary created:', newItinerary);
+                    this.hideCreateModal();
+                    this.showPlanView(newItinerary.id);
+                } catch (error) {
+                    this.debugLog('Create itinerary error:', error);
+                    this.showError(`Error creating itinerary: ${error.message}`);
+                }
+            }
+            
+            // --- REPLACED METHOD ---
+            async loadItineraries() {
+                const container = document.getElementById('itinerariesContainer');
+                const createCard = document.getElementById('createItineraryCard');
+
+                // Clear existing itinerary cards
+                container.querySelectorAll('.itinerary-card').forEach(card => card.remove());
+                
+                try {
+                    const itineraries = await this.apiCall('/itineraries/');
+                    this.debugLog('Itineraries loaded:', itineraries);
+                    
+                    itineraries.forEach(itinerary => {
+                        const card = this.createItineraryCard(itinerary);
+                        container.appendChild(card);
+                    });
+                    lucide.createIcons();
+                } catch (error) {
+                    this.debugLog('Load itineraries error:', error);
+                    this.showError('Could not load itineraries');
+                }
+            }
+
+            createItineraryCard(itinerary) {
+                const card = document.createElement('div');
+                // Added 'itinerary-card' class for easier selection
+                card.className = "itinerary-card glass-card rounded-2xl p-6 border border-white/20 hover:bg-white/20 transition-all cursor-pointer transform hover:scale-105 fade-in";
+                card.innerHTML = `
+                    <div class="flex flex-col h-full">
+                        <div class="flex-grow">
+                            <i data-lucide="map" class="h-10 w-10 text-white mb-3"></i>
+                 
+                           <h3 class="text-lg font-semibold text-white mb-2">${itinerary.name}</h3>
+                            <p class="text-white/70 text-sm">${itinerary.leg_count} leg(s) planned</p>
+                        </div>
+                    </div>
+         
+               `;
+                card.addEventListener('click', () => this.showPlanView(itinerary.id));
+                return card;
+            }
+            
+            // --- REPLACED METHOD ---
+            async addLeg(e) {
+                e.preventDefault();
+                try {
+                    const legData = {
+                        origin_airport: document.getElementById('originAirport').value,
+                        destination_airport: document.getElementById('destinationAirport').value,
+                        travel_date: document.getElementById('travelDate').value
+                    };
+                    const newLeg = await this.apiCall(`/itineraries/${this.currentItinerary.id}/legs/`, 'POST', legData);
+                    this.debugLog('Leg added:', newLeg);
+                    this.hideAddLegModal();
+                    // Refresh the itinerary data
+                    await this.showPlanView(this.currentItinerary.id);
+                } catch (error) {
+                    this.debugLog('Add leg error:', error);
+                    this.showError(`Error adding leg: ${error.message}`);
+                }
+            }
+            
+            // --- FIX: Renamed from loadLegs to renderLegs as it no longer fetches ---
+            renderLegs() {
+                const container = document.getElementById('legsContainer');
+                if (!this.currentItinerary || !this.currentItinerary.legs || this.currentItinerary.legs.length === 0) {
+                    container.innerHTML = `
+                        <div class="glass-card rounded-2xl p-8 border border-white/20 text-center">
+                            <i data-lucide="map-pin" class="h-12 w-12 text-white/60 mx-auto mb-4"></i>
+      
+                               <h3 class="text-lg font-semibold text-white mb-2">No travel legs yet</h3>
+                            <p class="text-white/70">Add your first travel leg to start planning</p>
+                        </div>
+           
+                     `;
+                    lucide.createIcons();
+                    return;
+                }
+
+                container.innerHTML = this.currentItinerary.legs.map((leg, index) => `
+                    <div class="glass-card rounded-2xl p-6 border border-white/20 mb-4 fade-in">
+                        <div class="flex items-center justify-between">
+                         
+                           <div class="flex items-center">
+                                <span class="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium mr-4">
+                                    Leg ${index + 1}
+                
+                                 </span>
+                                <div class="flex items-center text-white">
+                                    <span class="font-semibold">${leg.origin_airport}</span>
+            
+                                         <i data-lucide="arrow-right" class="h-4 w-4 mx-3"></i>
+                                    <span class="font-semibold">${leg.destination_airport}</span>
+                                </div>
+   
+                                         </div>
+                            <div class="text-white/80">
+                                ${new Date(leg.travel_date + 'T00:00:00').toLocaleDateString()}
+           
+                                 </div>
+                        </div>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            }
+            
+            // --- REPLACED METHOD ---
+            async generatePlan() {
+                const btn = document.getElementById('generatePlanBtn');
+                const spinner = document.getElementById('planSpinner');
+                const resultsDiv = document.getElementById('planResults');
+                
+                btn.disabled = true;
+                spinner.classList.remove('hidden');
+                resultsDiv.classList.add('hidden');
+                
+                const errorDiv = document.getElementById('planError');
+                if (errorDiv) errorDiv.classList.add('hidden');
+
+                try {
+                    this.debugLog('Generating plan for itinerary:', this.currentItinerary.id);
+                    const plan = await this.apiCall(`/itineraries/${this.currentItinerary.id}/plan`);
+                    this.debugLog('Plan generated:', plan);
+                    this.displayPlan(plan);
+                } catch (error) {
+                    this.debugLog('Generate plan error:', error);
+                    this.showError(`Could not generate plan: ${error.message}`, 'planError');
+                } finally {
+                    btn.disabled = false;
+                    spinner.classList.add('hidden');
+                }
+            }
+
+            displayPlan(plan) {
+                const resultsDiv = document.getElementById('planResults');
+                let html = '';
+                
+                // Sponsorship offers
+                if (plan.sponsorship_offers && plan.sponsorship_offers.length > 0) {
+                    html += `
+                        <div class="glass-card rounded-2xl p-6 border border-white/20 fade-in">
+                    
+                         <h3 class="text-xl font-bold text-white mb-4">
+                                <i data-lucide="gift" class="w-5 h-5 mr-2 inline"></i>
+                                Exclusive Offers for You
+                
+                             </h3>
+                            <div class="space-y-3">
+                                ${plan.sponsorship_offers.map(offer => `
+                         
+                           <div class="bg-white/10 rounded-lg p-4 border border-white/20">
+                                        <div class="font-semibold text-white">${offer.brand_name}</div>
+                                        <div class="text-white/80 text-sm mt-1">${offer.offer_description}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+   
+                         </div>
+                    `;
+                }
+
+                // Leg plans
+                plan.leg_plans.forEach((legPlan, index) => {
+                    html += `
+                        <div class="glass-card rounded-2xl p-6 border border-white/20 fade-in">
+           
+                                 <h3 class="text-xl font-bold text-white mb-4">
+                                Leg ${index + 1}: ${legPlan.leg_details.origin_airport} → ${legPlan.leg_details.destination_airport}
+                            </h3>
+             
+               
+                            ${legPlan.trip_plan.visa_information ? `
+                                <div class="mb-6">
+                      
+                               <h4 class="font-semibold text-white mb-2">
+                                        <i data-lucide="shield-check" class="w-4 h-4 mr-2 inline"></i>
+                                      
+                                 Visa Information
+                                    </h4>
+                                    <div class="bg-white/10 rounded-lg p-4 border border-white/20">
+                    
+                                     <div class="text-white font-medium">${legPlan.trip_plan.visa_information.name}</div>
+                                        <div class="text-white/80 text-sm">Policy: ${legPlan.trip_plan.visa_information.visa_policy}</div>
+                                   
+                                     <div class="text-white/80 text-sm">Processing: ${legPlan.trip_plan.visa_information.processing_time_days} days</div>
+                                    </div>
+                                </div>
+                       
+                     ` : ''}
+
+                            ${legPlan.trip_plan.flight_options.length > 0 ? `
+                                <div class="mb-6">
+                                    <h4 class="font-semibold text-white mb-2">
+                            
+                                     <i data-lucide="plane" class="w-4 h-4 mr-2 inline"></i>
+                                        Available Flights
+                                    </h4>
+      
+                                     <div class="space-y-2">
+                                        ${legPlan.trip_plan.flight_options.slice(0, 3).map(flight => `
+                          
+                                             <div class="bg-white/10 rounded-lg p-3 border border-white/20">
+                                                <div class="flex justify-between items-center">
+                          
+                                                   <span class="text-white font-medium">${flight.airline} ${flight.flight}</span>
+                                                    <span class="text-white/80 text-sm">${flight.type}</span>
+                 
+                                                 </div>
+                                            </div>
+                         
+                                         `).join('')}
+                                    </div>
+                                </div>
+                 
+                           ` : ''}
+
+                            ${legPlan.trip_plan.hotel_options.length > 0 ? `
+                                <div>
+                                    <h4 class="font-semibold text-white mb-2">
+                             
+                                           <i data-lucide="building" class="w-4 h-4 mr-2 inline"></i>
+                                        Recommended Hotels
+                                    </h4>
+       
+                                     <div class="space-y-2">
+                                        ${legPlan.trip_plan.hotel_options.slice(0, 3).map(hotel => `
+                           
+                                                 <div class="bg-white/10 rounded-lg p-3 border border-white/20">
+                                                <div class="flex justify-between items-center">
+                           
+                                                         <span class="text-white font-medium">${hotel.name}</span>
+                                                    ${hotel.reviewScore ? `
+                   
+                                                                     <span class="text-white/80 text-sm">${hotel.reviewScore}/10</span>
+                                                    ` : ''}
+       
+                                                                          </div>
+                                            </div>
+               
+                                         `).join('')}
+                                    </div>
+                                </div>
+       
+                                     ` : ''}
+                        </div>
+                    `;
+                });
+
+                resultsDiv.innerHTML = html;
+                resultsDiv.classList.remove('hidden');
+                lucide.createIcons();
+            }
+        }
+
+        // Initialize the app
+        
+        
+        const app = new NomadsCompassApp();
+</script>
+</body>
+</html>

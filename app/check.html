@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomad's Compass - Your Smart Travel Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glass-card { 
+            backdrop-filter: blur(16px) saturate(180%); 
+            -webkit-backdrop-filter: blur(16px) saturate(180%); 
+            background-color: rgba(255, 255, 255, 0.1); 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+        }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.5); }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg text-white antialiased">
+
+    <!-- App Container -->
+    <div id="app-container" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div id="modal-root"></div>
+        
+        <nav id="navbar" class="bg-white/10 backdrop-blur-md border-b border-white/20 fixed top-0 left-0 right-0 z-40 hidden">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center cursor-pointer" id="nav-brand">
+                        <i data-lucide="compass" class="h-8 w-8 text-white mr-3"></i>
+                        <span class="text-xl font-bold text-white">Nomad's Compass</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="userEmail" class="text-white/80 text-sm hidden md:block"></span>
+                        <button id="profileBtn" class="p-2 rounded-full text-white hover:bg-white/20 transition-colors" title="Profile">
+                            <i data-lucide="user" class="h-5 w-5"></i>
+                        </button>
+                        <button id="logoutBtn" class="p-2 rounded-full text-white hover:bg-white/20 transition-colors" title="Logout">
+                            <i data-lucide="log-out" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div class="h-16"></div> <!-- Spacer for fixed navbar -->
+
+        <main id="content-area" class="py-8"></main>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            class NomadsCompassApp {
+                constructor() {
+                    this.API_BASE_URL = 'http://localhost:8000'; // Fixed to match working version
+                    this.state = {
+                        token: localStorage.getItem('token'),
+                        currentUser: null,
+                        itineraries: [],
+                        currentItinerary: null,
+                    };
+                    this.initDOM();
+                    this.initApp();
+                }
+
+                initDOM() {
+                    this.dom = {
+                        navbar: document.getElementById('navbar'),
+                        userEmail: document.getElementById('userEmail'),
+                        logoutBtn: document.getElementById('logoutBtn'),
+                        profileBtn: document.getElementById('profileBtn'),
+                        contentArea: document.getElementById('content-area'),
+                        navBrand: document.getElementById('nav-brand'),
+                        modalRoot: document.getElementById('modal-root'),
+                    };
+                    
+                    // Verify all DOM elements exist
+                    Object.keys(this.dom).forEach(key => {
+                        if (!this.dom[key]) {
+                            console.error(`DOM element ${key} not found`);
+                        }
+                    });
+                }
+
+                async initApp() {
+                    try {
+                        lucide.createIcons();
+                        this.bindGlobalEvents();
+                        
+                        if (this.state.token) {
+                            await this.loadInitialData();
+                        }
+                        this.render();
+                    } catch (error) {
+                        console.error('App initialization failed:', error);
+                        this.showError('Application failed to initialize');
+                    }
+                }
+
+                bindGlobalEvents() {
+                    // Add null checks for DOM elements
+                    if (this.dom.logoutBtn) {
+                        this.dom.logoutBtn.addEventListener('click', () => this.logout());
+                    }
+                    if (this.dom.profileBtn) {
+                        this.dom.profileBtn.addEventListener('click', () => this.showProfileModal());
+                    }
+                    if (this.dom.navBrand) {
+                        this.dom.navBrand.addEventListener('click', () => {
+                            if (this.state.token) {
+                               this.state.currentItinerary = null;
+                               this.render();
+                            }
+                        });
+                    }
+                }
+                
+                async apiCall(endpoint, method = 'GET', body = null) {
+                    const headers = {};
+                    const options = { method, headers, signal: AbortSignal.timeout(20000) };
+
+                    if (this.state.token) {
+                        headers['Authorization'] = `Bearer ${this.state.token}`;
+                    }
+
+                    if (body) {
+                        if (endpoint === '/token') {
+                             const formData = new URLSearchParams(body);
+                             options.body = formData;
+                        } else {
+                            headers['Content-Type'] = 'application/json';
+                            options.body = JSON.stringify(body);
+                        }
+                    }
+                    
+                    try {
+                        const response = await fetch(`${this.API_BASE_URL}${endpoint}`, options);
+                        if (response.status === 204) return null;
+                        
+                        const data = await response.json();
+                        if (!response.ok) {
+                            if (response.status === 401) this.logout();
+                            throw new Error(data?.detail || `HTTP error! status: ${response.status}`);
+                        }
+                        return data;
+                    } catch (error) {
+                        console.error(`API Error on ${method} ${endpoint}:`, error);
+                        throw error;
+                    }
+                }
+
+                showError(message) {
+                    // Simple error display fallback
+                    console.error(message);
+                    if (this.dom.contentArea) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'glass-card rounded-lg p-4 bg-red-500/20 border border-red-500/50 text-red-100';
+                        errorDiv.textContent = message;
+                        this.dom.contentArea.appendChild(errorDiv);
+                    }
+                }
+
+                render() {
+                    try {
+                        if (this.dom.navbar) {
+                            this.dom.navbar.classList.toggle('hidden', !this.state.token);
+                        }
+                        
+                        if (this.state.token && this.state.currentUser) {
+                            if (this.dom.userEmail) {
+                                this.dom.userEmail.textContent = this.state.currentUser.email;
+                            }
+                            if (this.state.currentItinerary) {
+                                this.renderPlanView();
+                            } else {
+                                this.renderDashboard();
+                            }
+                        } else {
+                            this.renderAuthView();
+                        }
+                        
+                        // Re-initialize Lucide icons after DOM changes
+                        setTimeout(() => lucide.createIcons(), 100);
+                    } catch (error) {
+                        console.error('Render error:', error);
+                        this.showError('Failed to render interface');
+                    }
+                }
+
+                renderAuthView() {
+                    if (!this.dom.contentArea) return;
+                    
+                    this.dom.contentArea.innerHTML = `
+                        <div class="min-h-[calc(100vh-8rem)] flex items-center justify-center p-4">
+                            <div class="max-w-md w-full space-y-8 fade-in">
+                                <div class="text-center">
+                                    <i data-lucide="compass" class="mx-auto h-16 w-16 text-white mb-4"></i>
+                                    <h2 class="text-4xl font-bold text-white mb-2">Nomad's Compass</h2>
+                                    <p class="text-white/80">Your intelligent travel planning companion</p>
+                                </div>
+                                <div class="glass-card rounded-2xl p-8">
+                                    <div class="mb-6">
+                                        <div class="flex space-x-1 bg-white/10 rounded-lg p-1" id="authTabs">
+                                            <button data-mode="login" class="flex-1 py-2 text-sm font-medium rounded-md bg-white/20 text-white">Login</button>
+                                            <button data-mode="register" class="flex-1 py-2 text-sm font-medium rounded-md text-white/70">Register</button>
+                                        </div>
+                                    </div>
+                                    <form id="authForm" class="space-y-6">
+                                        <div>
+                                            <input id="email" type="email" required autocomplete="email" placeholder="Email address" 
+                                                   class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                                        </div>
+                                        <div>
+                                            <input id="password" type="password" required autocomplete="current-password" placeholder="Password" 
+                                                   class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                                        </div>
+                                        <div id="instagramField" class="hidden">
+                                            <input id="instagram" type="text" placeholder="Instagram handle (optional)" 
+                                                   class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                                        </div>
+                                        <button type="submit" class="w-full py-3 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-all transform hover:scale-105 flex items-center justify-center">
+                                            <span id="authSubmitText">Sign In</span>
+                                            <i id="authSpinner" data-lucide="loader-2" class="w-5 h-5 ml-2 loading-spinner hidden"></i>
+                                        </button>
+                                    </form>
+                                    <div id="authError" class="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-100 text-sm hidden"></div>
+                                </div>
+                            </div>
+                        </div>`;
+                    
+                    this.bindAuthEvents();
+                }
+
+                bindAuthEvents() {
+                    const authTabs = document.getElementById('authTabs');
+                    const authForm = document.getElementById('authForm');
+                    
+                    if (authTabs) {
+                        authTabs.addEventListener('click', e => {
+                            if (e.target.tagName === 'BUTTON') {
+                                this.switchAuthMode(e.target.dataset.mode === 'login');
+                            }
+                        });
+                    }
+                    
+                    if (authForm) {
+                        authForm.addEventListener('submit', e => this.handleAuth(e));
+                    }
+                }
+
+                renderDashboard() {
+                    if (!this.dom.contentArea) return;
+                    
+                    const itinerariesHTML = this.state.itineraries.map(itinerary => 
+                        this.createItineraryCardComponent(itinerary)
+                    ).join('');
+                    
+                    this.dom.contentArea.innerHTML = `
+                        <div class="mb-8">
+                            <h1 class="text-3xl font-bold text-white mb-2">My Travel Itineraries</h1>
+                            <p class="text-white/80">Plan your next adventure with AI-powered insights</p>
+                        </div>
+                        <div id="itinerariesContainer" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                             <div class="glass-card rounded-2xl p-6 hover:bg-white/20 transition-all cursor-pointer transform hover:scale-105 flex items-center justify-center flex-col min-h-[200px]" id="createItineraryCard">
+                                <i data-lucide="plus-circle" class="h-12 w-12 text-white mx-auto mb-4"></i>
+                                <h3 class="text-lg font-semibold text-white mb-2">Create New Itinerary</h3>
+                                <p class="text-white/70 text-sm text-center">Start planning your next journey</p>
+                            </div>
+                            ${itinerariesHTML}
+                        </div>`;
+                    
+                    this.bindDashboardEvents();
+                }
+
+                bindDashboardEvents() {
+                    const createCard = document.getElementById('createItineraryCard');
+                    const container = document.getElementById('itinerariesContainer');
+                    
+                    if (createCard) {
+                        createCard.addEventListener('click', () => this.showCreateItineraryModal());
+                    }
+                    
+                    if (container) {
+                        container.addEventListener('click', e => {
+                            const card = e.target.closest('[data-id]');
+                            if (card) {
+                                const itineraryId = parseInt(card.dataset.id);
+                                const itinerary = this.state.itineraries.find(i => i.id === itineraryId);
+                                if (itinerary) {
+                                    this.state.currentItinerary = itinerary;
+                                    this.render();
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                renderPlanView() {
+                    if (!this.dom.contentArea || !this.state.currentItinerary) return;
+                    
+                    const { name, legs = [] } = this.state.currentItinerary;
+                    const legsHTML = legs.length > 0 ? 
+                        legs.map((leg, index) => this.createLegCardComponent(leg, index)).join('') : 
+                        this.createEmptyStateComponent('map-pin', 'No travel legs yet', "Click 'Add Leg' to start planning your journey.");
+
+                    this.dom.contentArea.innerHTML = `
+                        <div class="flex items-center justify-between mb-8">
+                            <div class="flex items-center">
+                                <button id="backToDashboard" class="mr-4 p-2 text-white hover:text-white/80 transition-colors rounded-full hover:bg-white/10">
+                                    <i data-lucide="arrow-left" class="h-6 w-6"></i>
+                                </button>
+                                <div>
+                                    <h1 class="text-3xl font-bold text-white">${name}</h1>
+                                </div>
+                            </div>
+                            <button id="addLegBtn" class="bg-white text-purple-700 px-4 py-2 rounded-lg font-semibold hover:bg-white/90 transition-colors flex items-center">
+                                <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Leg
+                            </button>
+                        </div>
+                        <div id="legsContainer" class="mb-8 space-y-4">${legsHTML}</div>
+                        <div class="text-center mb-8">
+                            <button id="generatePlanBtn" class="bg-white text-purple-700 px-8 py-3 rounded-lg font-semibold hover:bg-white/90 transition-all transform hover:scale-105 flex items-center justify-center mx-auto">
+                                <i data-lucide="sparkles" class="w-5 h-5 mr-2"></i>Generate Full Plan
+                                <i id="planSpinner" data-lucide="loader-2" class="w-5 h-5 ml-2 loading-spinner hidden"></i>
+                            </button>
+                        </div>
+                        <div id="planResults" class="hidden space-y-6"></div>`;
+
+                    this.bindPlanEvents();
+                }
+
+                bindPlanEvents() {
+                    const backBtn = document.getElementById('backToDashboard');
+                    const addLegBtn = document.getElementById('addLegBtn');
+                    const generateBtn = document.getElementById('generatePlanBtn');
+                    
+                    if (backBtn) {
+                        backBtn.addEventListener('click', () => { 
+                            this.state.currentItinerary = null; 
+                            this.render(); 
+                        });
+                    }
+                    
+                    if (addLegBtn) {
+                        addLegBtn.addEventListener('click', () => this.showAddLegModal());
+                    }
+                    
+                    if (generateBtn) {
+                        generateBtn.addEventListener('click', () => this.handleGeneratePlan());
+                    }
+                }
+                
+                createItineraryCardComponent(itinerary) {
+                    const legs = itinerary.legs || [];
+                    const legsSummary = legs.length > 0 ? 
+                        `${legs[0].origin_airport} <i data-lucide="arrow-right" class="w-4 h-4 mx-1"></i> ${legs[legs.length - 1].destination_airport}` : 
+                        'No legs yet';
+                    
+                    return `
+                        <div class="glass-card rounded-2xl p-6 hover:bg-white/20 transition-all cursor-pointer transform hover:scale-105 flex flex-col justify-between min-h-[200px] fade-in" data-id="${itinerary.id}">
+                            <div>
+                                <h3 class="text-lg font-semibold text-white mb-2">${itinerary.name}</h3>
+                                <p class="text-white/70 text-sm">${legs.length} leg(s)</p>
+                            </div>
+                            <div class="flex items-center text-white/80 mt-4">
+                                <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
+                                <span class="text-sm flex items-center">${legsSummary}</span>
+                            </div>
+                        </div>`;
+                }
+
+                createLegCardComponent(leg, index) {
+                    const travelDate = new Date(leg.travel_date + 'T00:00:00').toLocaleDateString('en-GB', { 
+                        day: 'numeric', month: 'short', year: 'numeric' 
+                    });
+                    
+                    return `
+                        <div class="glass-card rounded-2xl p-6 border border-white/20 fade-in">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <span class="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium mr-4">Leg ${index + 1}</span>
+                                    <div class="flex items-center text-white text-lg font-semibold">
+                                        ${leg.origin_airport}
+                                        <i data-lucide="arrow-right" class="h-5 w-5 mx-3 text-white/70"></i>
+                                        ${leg.destination_airport}
+                                    </div>
+                                </div>
+                                <div class="text-white/80 text-sm">${travelDate}</div>
+                            </div>
+                        </div>`;
+                }
+
+                createEmptyStateComponent(icon, title, message) {
+                    return `
+                        <div class="glass-card rounded-2xl p-8 text-center">
+                            <i data-lucide="${icon}" class="w-12 h-12 text-white/60 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">${title}</h3>
+                            <p class="text-white/70">${message}</p>
+                        </div>`;
+                }
+
+                switchAuthMode(isLogin) {
+                    const loginTab = document.querySelector('[data-mode="login"]');
+                    const registerTab = document.querySelector('[data-mode="register"]');
+                    const instagramField = document.getElementById('instagramField');
+                    const submitText = document.getElementById('authSubmitText');
+                    
+                    if (!loginTab || !registerTab || !instagramField || !submitText) return;
+                    
+                    if (isLogin) {
+                        loginTab.className = 'flex-1 py-2 text-sm font-medium rounded-md bg-white/20 text-white';
+                        registerTab.className = 'flex-1 py-2 text-sm font-medium rounded-md text-white/70';
+                        instagramField.classList.add('hidden');
+                        submitText.textContent = 'Sign In';
+                    } else {
+                        loginTab.className = 'flex-1 py-2 text-sm font-medium rounded-md text-white/70';
+                        registerTab.className = 'flex-1 py-2 text-sm font-medium rounded-md bg-white/20 text-white';
+                        instagramField.classList.remove('hidden');
+                        submitText.textContent = 'Create Account';
+                    }
+                    
+                    this.isLoginMode = isLogin;
+                }
+
+                async handleAuth(e) {
+                    e.preventDefault();
+                    const spinner = document.getElementById('authSpinner');
+                    const errorDiv = document.getElementById('authError');
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+                    const instagram = document.getElementById('instagram')?.value || '';
+                    
+                    if (!spinner || !errorDiv || !submitBtn) return;
+                    
+                    spinner.classList.remove('hidden');
+                    errorDiv.classList.add('hidden');
+                    submitBtn.disabled = true;
+                    
+                    try {
+                        if (this.isLoginMode) {
+                            const data = await this.apiCall('/token', 'POST', { username: email, password });
+                            this.state.token = data.access_token;
+                        } else {
+                            await this.apiCall('/users/register', 'POST', { 
+                                email, 
+                                password, 
+                                instagram_handle: instagram || null 
+                            });
+                            const data = await this.apiCall('/token', 'POST', { username: email, password });
+                            this.state.token = data.access_token;
+                        }
+                        
+                        localStorage.setItem('token', this.state.token);
+                        await this.loadInitialData();
+                        this.render();
+                    } catch (error) {
+                        errorDiv.textContent = error.message;
+                        errorDiv.classList.remove('hidden');
+                    } finally {
+                        spinner.classList.add('hidden');
+                        submitBtn.disabled = false;
+                    }
+                }
+                
+                logout() {
+                    localStorage.removeItem('token');
+                    this.state.token = null;
+                    this.state.currentUser = null;
+                    this.state.itineraries = [];
+                    this.state.currentItinerary = null;
+                    this.render();
+                }
+                
+                async loadInitialData() {
+                    try {
+                        const [user, itineraries] = await Promise.all([
+                            this.apiCall('/users/me'),
+                            this.apiCall('/itineraries/')
+                        ]);
+                        this.state.currentUser = user;
+                        this.state.itineraries = itineraries;
+                    } catch (e) {
+                        console.error("Failed to load initial data, logging out.", e);
+                        this.logout();
+                    }
+                }
+
+                showModal(title, formHTML, submitHandler) {
+                    if (!this.dom.modalRoot) return;
+                    
+                    const modal = document.createElement('div');
+                    modal.className = "fade-in fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50";
+                    modal.innerHTML = `
+                        <div class="glass-card rounded-2xl p-6 max-w-md w-full">
+                            <h3 class="text-xl font-bold text-white mb-4">${title}</h3>
+                            <form id="modalForm">${formHTML}</form>
+                        </div>`;
+                    
+                    const form = modal.querySelector('#modalForm');
+                    if (form && submitHandler) {
+                        form.addEventListener('submit', (e) => {
+                            e.preventDefault();
+                            submitHandler(e, modal);
+                        });
+                    }
+                    
+                    const cancelButton = modal.querySelector('[data-action="cancel"]');
+                    if (cancelButton) {
+                        cancelButton.addEventListener('click', () => this.dom.modalRoot.innerHTML = '');
+                    }
+                    
+                    this.dom.modalRoot.innerHTML = '';
+                    this.dom.modalRoot.appendChild(modal);
+                    
+                    setTimeout(() => lucide.createIcons(), 100);
+                }
+
+                showCreateItineraryModal() {
+                    const formHTML = `
+                        <input id="itineraryName" type="text" required placeholder="e.g., Southeast Asia Adventure" 
+                               class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50 mb-4">
+                        <div class="flex space-x-3">
+                            <button type="button" data-action="cancel" class="flex-1 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors">Cancel</button>
+                            <button type="submit" class="flex-1 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-colors">Create</button>
+                        </div>`;
+                    this.showModal('Create New Itinerary', formHTML, (e, modal) => this.handleCreateItinerary(e, modal));
+                }
+
+                showAddLegModal() {
+                    const formHTML = `
+                        <div class="space-y-4">
+                            <div>
+                                <input id="originAirport" type="text" required placeholder="Origin (e.g., BOM)" 
+                                       class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50" 
+                                       maxlength="3" style="text-transform: uppercase;">
+                            </div>
+                            <div>
+                                <input id="destinationAirport" type="text" required placeholder="Destination (e.g., BKK)" 
+                                       class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50" 
+                                       maxlength="3" style="text-transform: uppercase;">
+                            </div>
+                            <div>
+                                <input id="travelDate" type="date" required 
+                                       class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white/50">
+                            </div>
+                            <div class="flex space-x-3">
+                                <button type="button" data-action="cancel" class="flex-1 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors">Cancel</button>
+                                <button type="submit" class="flex-1 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-colors">Add Leg</button>
+                            </div>
+                        </div>`;
+                    this.showModal('Add Travel Leg', formHTML, (e, modal) => this.handleAddLeg(e, modal));
+                }
+
+                showProfileModal() {
+                    if (!this.state.currentUser) return;
+                    
+                    const handle = this.state.currentUser.instagram_handle || '';
+                    const formHTML = `
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm text-white/70">Email</label>
+                                <input type="email" value="${this.state.currentUser.email}" readonly 
+                                       class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white/60 cursor-not-allowed">
+                            </div>
+                            <div>
+                                <label class="text-sm text-white/70">Instagram Handle</label>
+                                <input id="instagramHandle" type="text" value="${handle}" placeholder="@username" 
+                                       class="w-full px-4 py-3 bg-white/10 border-none rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50">
+                            </div>
+                            <div class="flex space-x-3">
+                                <button type="button" data-action="cancel" class="flex-1 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors">Cancel</button>
+                                <button type="submit" class="flex-1 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-white/90 transition-colors">Update</button>
+                            </div>
+                        </div>`;
+                    this.showModal('Profile Settings', formHTML, (e, modal) => this.handleUpdateProfile(e, modal));
+                }
+
+                async handleCreateItinerary(e, modal) {
+                    const name = document.getElementById('itineraryName')?.value.trim();
+                    if (!name) return;
+                    
+                    try {
+                        const itinerary = await this.apiCall('/itineraries/', 'POST', { name });
+                        this.state.itineraries.push(itinerary);
+                        this.dom.modalRoot.innerHTML = '';
+                        this.render();
+                    } catch (error) {
+                        this.showError(error.message);
+                    }
+                }
+
+                async handleAddLeg(e, modal) {
+                    const origin = document.getElementById('originAirport')?.value.trim().toUpperCase();
+                    const destination = document.getElementById('destinationAirport')?.value.trim().toUpperCase();
+                    const date = document.getElementById('travelDate')?.value;
+                    
+                    if (!origin || !destination || !date || !this.state.currentItinerary) return;
+                    
+                    try {
+                        const leg = await this.apiCall(`/itineraries/${this.state.currentItinerary.id}/legs/`, 'POST', {
+                            origin_airport: origin,
+                            destination_airport: destination,
+                            travel_date: date
+                        });
+                        
+                        if (!this.state.currentItinerary.legs) {
+                            this.state.currentItinerary.legs = [];
+                        }
+                        this.state.currentItinerary.legs.push(leg);
+                        
+                        this.dom.modalRoot.innerHTML = '';
+                        this.render();
+                    } catch (error) {
+                        this.showError(error.message);
+                    }
+                }
+
+                async handleUpdateProfile(e, modal) {
+                    const handle = document.getElementById('instagramHandle')?.value.trim();
+                    
+                    try {
+                        const updatedUser = await this.apiCall('/users/me', 'PUT', { 
+                            instagram_handle: handle || null 
+                        });
+                        this.state.currentUser = updatedUser;
+                        this.dom.modalRoot.innerHTML = '';
+                        this.render();
+                    } catch (error) {
+                        this.showError(error.message);
+                    }
+                }
+
+                async handleGeneratePlan() {
+                    if (!this.state.currentItinerary?.legs?.length) {
+                        this.showError('Please add at least one travel leg before generating a plan.');
+                        return;
+                    }
+                    
+                    const spinner = document.getElementById('planSpinner');
+                    const button = document.getElementById('generatePlanBtn');
+                    const resultsDiv = document.getElementById('planResults');
+                    
+                    if (!spinner || !button || !resultsDiv) return;
+                    
+                    spinner.classList.remove('hidden');
+                    button.disabled = true;
+                    
+                    try {
+                        const plan = await this.apiCall(`/itineraries/${this.state.currentItinerary.id}/generate-plan/`, 'POST');
+                        
+                        resultsDiv.innerHTML = `
+                            <div class="glass-card rounded-2xl p-6">
+                                <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                                    <i data-lucide="sparkles" class="w-5 h-5 mr-2"></i>
+                                    Your AI-Generated Travel Plan
+                                </h3>
+                                <div class="prose prose-invert max-w-none">
+                                    <div class="text-white/90 whitespace-pre-wrap leading-relaxed">${plan.plan_content}</div>
+                                </div>
+                            </div>`;
+                        
+                        resultsDiv.classList.remove('hidden');
+                        
+                        // Smooth scroll to results
+                        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        
+                    } catch (error) {
+                        this.showError(error.message);
+                    } finally {
+                        spinner.classList.add('hidden');
+                        button.disabled = false;
+                        setTimeout(() => lucide.createIcons(), 100);
+                    }
+                }
+            }
+
+            // Initialize the application
+            new NomadsCompassApp();
+        });
+    </script>
+</body>
+</html>

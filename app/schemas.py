@@ -35,7 +35,6 @@ class Country(CountryBase):
     requirements: List[VisaRequirement] = []
     class Config: from_attributes = True
 
-# THIS IS ONE OF THE MISSING CLASSES
 class CountryUpdate(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
@@ -56,7 +55,6 @@ class User(UserBase):
     id: int
     class Config: from_attributes = True
 
-# THIS IS THE OTHER MISSING CLASS
 class UserUpdate(BaseModel):
     instagram_handle: Optional[str] = None
 
@@ -70,18 +68,26 @@ class TokenData(BaseModel):
 # =================================
 # Schemas for External APIs
 # =================================
+class AutoCompleteLocation(BaseModel):
+    id: str
+    name: str
+
 class FlightData(BaseModel):
     airline: str
-    flight: str
-    departure: str
-    arrival: str
-    altitude: Optional[int] = None
-    type: str
+    flight_number: str
+    departure_time: str
+    arrival_time: str
+    price: float
+    duration: str
+    class Config: from_attributes = True
 
 class HotelData(BaseModel):
     name: str
-    reviewScore: Optional[float] = None
-    reviewScoreWord: Optional[str] = None
+    price_per_night: float
+    rating: float
+    location: str
+    class Config: 
+        from_attributes = True
 
 # =================================
 # Schemas for Itinerary Engine
@@ -129,3 +135,6 @@ class FullItineraryPlan(BaseModel):
     itinerary_details: Itinerary
     leg_plans: List[LegPlan]
     sponsorship_offers: List[SponsorshipOffer] = []
+    plan_content: str
+    class Config:
+        from_attributes = True

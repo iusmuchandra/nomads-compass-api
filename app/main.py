@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 from jose import JWTError, jwt
@@ -13,6 +14,15 @@ app = FastAPI(
     title="Nomad's Compass API",
     description="The core engine for the world's smartest travel agent.",
     version="3.0.0" # Version bump for Creator Connect
+)
+
+# ADD CORS MIDDLEWARE - THIS IS WHAT'S MISSING
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Security Setup & Dependency ---
@@ -74,13 +84,21 @@ def update_users_me(
 
 # --- Itinerary Engine Endpoints (Protected) ---
 @app.post("/itineraries/", response_model=schemas.Itinerary, tags=["Itinerary Engine"])
-def create_new_itinerary(
+def create_itinerary(
     itinerary: schemas.ItineraryCreate, 
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """Creates a new, empty itinerary for the currently logged-in user."""
     return crud.create_itinerary(db=db, itinerary=itinerary, owner_id=current_user.id)
+
+@app.get("/itineraries/", response_model=List[schemas.Itinerary], tags=["Itinerary Engine"])
+def get_user_itineraries(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Gets all itineraries for the currently logged-in user."""
+    return crud.get_itineraries_by_owner(db=db, owner_id=current_user.id)
 
 @app.post("/itineraries/{itinerary_id}/legs/", response_model=schemas.Leg, tags=["Itinerary Engine"])
 def add_leg_to_itinerary(
@@ -94,6 +112,23 @@ def add_leg_to_itinerary(
     if db_itinerary is None or db_itinerary.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Itinerary not found or you do not have permission to access it")
     return crud.create_itinerary_leg(db=db, leg=leg, itinerary_id=itinerary_id)
+
+@app.post("/itineraries/{itinerary_id}/generate-plan/", response_model=schemas.FullItineraryPlan, tags=["Itinerary Engine"])
+async def generate_full_itinerary_plan(
+    itinerary_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Generate a complete travel plan for an itinerary including sponsorship offers.
+    """
+    db_itinerary = crud.get_itinerary(db, itinerary_id=itinerary_id)
+    if db_itinerary is None or db_itinerary.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Itinerary not found or you do not have permission to access it")
+    
+    # This should call your actual plan generation logic
+    full_plan = await planner.create_full_itinerary_plan(db=db, itinerary=db_itinerary, user=current_user)
+    return full_plan
 
 @app.get("/itineraries/{itinerary_id}/plan", response_model=schemas.FullItineraryPlan, tags=["Itinerary Engine"])
 async def get_full_itinerary_plan(
@@ -112,7 +147,14 @@ async def get_full_itinerary_plan(
     full_plan = await planner.create_full_itinerary_plan(db=db, itinerary=db_itinerary, user=current_user)
     return full_plan
 
-# --- Visa & Flight Endpoints (Public) ---
+# --- Visa & Country Management Endpoints (Public) ---
+@app.post("/visa/", response_model=schemas.Country, tags=["Visa & Country Management"])
+def create_new_country(country: schemas.CountryCreate, db: Session = Depends(get_db)):
+    db_country = crud.get_country_by_code(db, country_code=country.code)
+    if db_country:
+        raise HTTPException(status_code=400, detail="Country with this code already exists")
+    return crud.create_country(db=db, country=country)
+
 @app.get("/visa/{country_code}", response_model=schemas.Country, tags=["Visa & Country Management"])
 def get_visa_info(country_code: str, db: Session = Depends(get_db)):
     db_country = crud.get_country_by_code(db, country_code=country_code)
@@ -120,6 +162,22 @@ def get_visa_info(country_code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Country data not found")
     return db_country
 
+@app.put("/visa/{country_id}", response_model=schemas.Country, tags=["Visa & Country Management"])
+def update_country_info(country_id: int, country: schemas.CountryUpdate, db: Session = Depends(get_db)):
+    db_country = crud.update_country(db, country_id=country_id, country_update=country)
+    if db_country is None:
+        raise HTTPException(status_code=404, detail="Country not found")
+    return db_country
+
+@app.delete("/visa/{country_id}", response_model=dict, tags=["Visa & Country Management"])
+def delete_country_info(country_id: int, db: Session = Depends(get_db)):
+    db_country = crud.delete_country(db, country_id=country_id)
+    if db_country is None:
+        raise HTTPException(status_code=404, detail="Country not found")
+    return {"message": f"Country '{db_country.name}' deleted successfully"}
+
+
+# --- External Integrations Endpoints (Public) ---
 @app.get("/flights/{airline_code}", response_model=List[schemas.FlightData], tags=["External Integrations"])
 async def get_flights_for_airline(airline_code: str):
     flight_results = await flights.search_flights_by_airline(airline_code=airline_code)
