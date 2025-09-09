@@ -1,19 +1,127 @@
-# In docker-compose.yml
-
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   db:
-    image: postgres:16
-    restart: always
+    image: postgres:15-alpine
+    container_name: nomads_compass_db
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres      # Replaced with the user from your .env
-      - POSTGRES_PASSWORD=Ranga123  # Replaced with the password from your .env
-      - POSTGRES_DB=nomads_compass_db       # Replaced with the db name from your .env
+      POSTGRES_DB: ${DB_NAME:-nomads_compass}
+      POSTGRES_USER: ${DB_USER:-nomad_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
+    networks:
+      - nomads_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nomad_user} -d ${DB_NAME:-nomads_compass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching (optional but recommended)
+  redis:
+    image: redis:7-alpine
+    container_name: nomads_compass_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - redis_data:/data
+    networks:
+      - nomads_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Main API Application
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: nomads_compass_api
+    restart: unless-stopped
+    environment:
+      # Database Configuration
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-nomad_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-nomads_compass}
+      
+      # Security Configuration  
+      SECRET_KEY: ${SECRET_KEY}
+      
+      # External API Keys
+      AERODATASPHERE_API_KEY: ${AERODATASPHERE_API_KEY}
+      HOTEL_API_KEY: ${HOTEL_API_KEY}
+      
+      # Application Configuration
+      PYTHONPATH: /app
+      ENVIRONMENT: production
+      
+      # Redis Configuration (optional)
+      REDIS_URL: redis://redis:6379/0
+      
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nomads_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: nomads_compass_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - static_files:/var/www/static:ro
+    depends_on:
+      - api
+    networks:
+      - nomads_network
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_files:
+    driver: local
+
+networks:
+  nomads_network:
+    driver: bridge
+
+# Environment file template (.env.example)
+# Copy this to .env and fill in your values:
+#
+# # Database Configuration
+# DB_NAME=nomads_compass
+# DB_USER=nomad_user
+# DB_PASSWORD=your_secure_db_password_here
+# 
+# # Security
+# SECRET_KEY=your_jwt_secret_key_here_make_it_long_and_random
+# 
+# # External APIs
+# AERODATASPHERE_API_KEY=your_flight_api_key_here
+# HOTEL_API_KEY=your_hotel_api_key_here

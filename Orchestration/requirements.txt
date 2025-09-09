@@ -1,0 +1,33 @@
+# Core FastAPI and ASGI server
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+
+# Async Database Dependencies
+sqlalchemy[asyncio]==2.0.43
+asyncpg==0.29.0  # PostgreSQL async driver
+aiosqlite==0.20.0  # SQLite async driver
+
+# Legacy sync support (for migration)
+psycopg2-binary==2.9.10
+
+# Authentication and Security
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.5.0
+
+# Data Validation and Environment
+pydantic[email]==2.11.7
+python-dotenv==1.1.1
+
+# HTTP Client for External APIs
+httpx==0.28.1
+
+# Form Data Support
+python-multipart==0.0.20
+
+# Development and Testing (dev dependencies)
+pytest==8.0.0
+pytest-asyncio==0.23.4
+httpx==0.28.1  # For test client
+safety==3.0.1  # Security vulnerability scanning
+bandit==1.7.5  # Security linting

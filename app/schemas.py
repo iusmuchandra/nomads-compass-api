@@ -79,7 +79,11 @@ class FlightData(BaseModel):
     arrival_time: str
     price: float
     duration: str
-    class Config: from_attributes = True
+    # FIX #2: Add the optional note field
+    note: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class HotelData(BaseModel):
     name: str
