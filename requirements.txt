@@ -8,6 +8,4 @@ python-jose[cryptography]==3.5.0
 pydantic[email]==2.11.7
 httpx==0.28.1
 python-multipart==0.0.20
-
-asyncpg
-aiosqli
+asyncpg==0.30.0
